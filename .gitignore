@@ -1,0 +1,21 @@
+# compiled output
+/dist
+/node_modules
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.local
+
+# Editor
+.vscode
+.idea
