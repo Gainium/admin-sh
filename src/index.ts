@@ -37,10 +37,22 @@ app.use('/api/updates', updatesRouter)
 app.use('/api/upgrade', upgradeRouter)
 
 // Errors that escape a route handler (rare; routes handle their own).
-app.use((err: Error, _req: express.Request, res: express.Response) => {
-  logger.error('unhandled error', { err: err.message, stack: err.stack })
-  res.status(500).json({ error: err.message || 'Internal server error' })
-})
+// Express detects error-handling middleware by ARITY === 4. Do NOT drop
+// the `_next` parameter even though it's unused — Express will then
+// treat this as ordinary middleware where arg[0] is `req`, blowing up
+// at `res.status` (which is actually `req.status`).
+app.use(
+  (
+    err: Error,
+    _req: express.Request,
+    res: express.Response,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _next: express.NextFunction,
+  ) => {
+    logger.error('unhandled error', { err: err.message, stack: err.stack })
+    res.status(500).json({ error: err.message || 'Internal server error' })
+  },
+)
 
 const server = app.listen(env.port, () => {
   logger.info('admin-sh listening', {

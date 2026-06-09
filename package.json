@@ -1,6 +1,6 @@
 {
   "name": "@gainium/admin-sh",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Self-hosted Gainium admin API. Manages docker compose services, granular exchange enable/disable, and image upgrades for docker-sh deployments.",
   "private": true,
   "license": "MIT",
