@@ -6,6 +6,7 @@ import { logger } from './logger'
 import { authMiddleware } from './auth'
 import { seedDefaultEnabledExchanges } from './config'
 import { containersRouter } from './routes/containers'
+import { diagnosticsRouter } from './routes/diagnostics'
 import { exchangesRouter } from './routes/exchanges'
 import { updatesRouter } from './routes/updates'
 import { upgradeRouter } from './routes/upgrade'
@@ -32,6 +33,7 @@ app.get('/health', (_req, res) => {
 // Everything else under /api requires a valid JWT.
 app.use('/api', authMiddleware)
 app.use('/api/containers', containersRouter)
+app.use('/api/diagnostics', diagnosticsRouter)
 app.use('/api/exchanges', exchangesRouter)
 app.use('/api/updates', updatesRouter)
 app.use('/api/upgrade', upgradeRouter)

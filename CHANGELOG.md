@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-01
+
+### Added
+- `/api/diagnostics` (+ `/api/diagnostics/feeds`): ops-health snapshot —
+  per-service up/health state, Redis reachability + latency, and a live
+  market-data feed probe that pattern-subscribes to the websocket-connector
+  channels (`trade@{sym}@{exchange}`, `{sym}@{exchange}@{interval}Candle`) for
+  a short window and reports live-tick counts per exchange, flagging enabled
+  exchanges that are receiving no data.
+
 ## [1.0.1] - 2026-06-09
 
 ### Fixed

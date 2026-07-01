@@ -34,5 +34,13 @@ export function getRedisSubscriber(): Redis {
   return sub
 }
 
+// A throwaway connection for short-lived pattern subscriptions (e.g. the
+// market-data feed probe). Kept separate from the shared `sub` client so a
+// probe's psubscribe/punsubscribe never disturbs other subscriptions, and so
+// concurrent probes don't collide. Caller MUST `.quit()` it when done.
+export function createRedisConnection(): Redis {
+  return build('sub')
+}
+
 export const CONFIG_CHANNEL = 'gainium:admin:config'
 export const ENABLED_EXCHANGES_KEY = 'gainium:admin:enabled_exchanges'
