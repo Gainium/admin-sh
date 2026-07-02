@@ -4,6 +4,7 @@ import path from 'path'
 import {
   HttpError,
   listProjectContainers,
+  ping,
   pullImage,
   recreateWithImage,
   spawnRecreateHelper,
@@ -12,6 +13,13 @@ import {
 import { parseImageRef } from '../registry'
 import { env } from '../env'
 import { logger } from '../logger'
+import {
+  MANUAL_FALLBACK,
+  logFileName,
+  reconcile,
+  statusFileName,
+  writeInProgress,
+} from '../selfUpgrade'
 
 export const upgradeRouter = Router()
 
@@ -88,20 +96,59 @@ async function persistTag(service: string, tag: string): Promise<void> {
   await writeVersionsFile(current)
 }
 
-async function launchSelfUpgradeHelper(targetRef: string): Promise<string> {
+/**
+ * Fail fast, *before* persisting the tag or reporting success, when the
+ * environment can't actually complete a self-upgrade. Each error names the
+ * misconfiguration and the manual fallback so the operator isn't left on a
+ * silently-stale container (community thread 4872).
+ */
+async function assertSelfUpgradePossible(): Promise<void> {
   if (!env.composeDirHostPath) {
     throw new HttpError(
-      500,
-      'Self-upgrade requires COMPOSE_DIR_HOST_PATH to be set to the host path of the docker-sh project directory.',
+      501,
+      `Cannot self-upgrade admin-sh: COMPOSE_DIR_HOST_PATH is not set, so admin-sh can't spawn the helper that recreates its own container. Set it to the host path of the docker-sh project dir and recreate admin-sh, or upgrade manually: ${MANUAL_FALLBACK}`,
     )
   }
+  // The helper recreates via ${COMPOSE_DIR_HOST_PATH}/docker-compose.yml on
+  // the host; admin-sh sees that same dir at workspaceDir. If the compose
+  // file isn't visible there, the bind mount is missing or points
+  // elsewhere and the helper would fail after admin-sh is already gone.
+  const composeFile = path.join(env.workspaceDir, 'docker-compose.yml')
+  try {
+    await fs.access(composeFile)
+  } catch {
+    throw new HttpError(
+      501,
+      `Cannot self-upgrade admin-sh: docker-compose.yml is not visible at ${composeFile} (expected the docker-sh project dir bind-mounted there). Check the admin-sh volume mount and COMPOSE_DIR_HOST_PATH, or upgrade manually: ${MANUAL_FALLBACK}`,
+    )
+  }
+  if (!(await ping())) {
+    throw new HttpError(
+      500,
+      `Cannot self-upgrade admin-sh: the Docker daemon is unreachable. Upgrade manually once it's back: ${MANUAL_FALLBACK}`,
+    )
+  }
+}
+
+async function launchSelfUpgradeHelper(
+  targetRef: string,
+  targetTag: string,
+): Promise<string> {
+  // composeDirHostPath is guaranteed set by assertSelfUpgradePossible().
   const { helperId } = await spawnRecreateHelper({
     service: ADMIN_SH_SERVICE,
     helperImage: env.helperImage,
     composeProject: env.composeProject,
-    composeDirHostPath: env.composeDirHostPath,
+    composeDirHostPath: env.composeDirHostPath as string,
+    targetTag,
+    statusFileName: statusFileName(),
+    logFileName: logFileName(),
   })
-  logger.info('self-upgrade helper launched', { targetRef, helperId })
+  logger.info('self-upgrade helper launched', {
+    targetRef,
+    targetTag,
+    helperId,
+  })
   return helperId
 }
 
@@ -113,10 +160,24 @@ interface UpgradeRequest {
   tag?: string
 }
 
+interface UpgradeResult {
+  service: string
+  oldId: string
+  newId: string
+  /** Present only for admin-sh: the recreate is async (admin-sh dies
+   *  mid-swap), so the caller must poll `statusUrl` for the real outcome. */
+  selfUpgrade?: {
+    pending: true
+    targetTag: string
+    statusUrl: string
+    manualFallback: string
+  }
+}
+
 async function upgradeOne(
   container: ServiceContainer,
   tag: string,
-): Promise<{ service: string; oldId: string; newId: string }> {
+): Promise<UpgradeResult> {
   const parsed = parseImageRef(container.image)
   if (!parsed) {
     throw new HttpError(
@@ -127,6 +188,14 @@ async function upgradeOne(
   const newRef = parsed.host
     ? `${parsed.host}/${parsed.repo}:${tag}`
     : `${parsed.repo}:${tag}`
+
+  // For a self-upgrade, verify the environment can actually complete the
+  // swap before we even pull — no point downloading an image we can't
+  // apply, and the operator gets a fast, clear error.
+  if (container.service === ADMIN_SH_SERVICE) {
+    await assertSelfUpgradePossible()
+  }
+
   logger.info('upgrade: pulling image', {
     service: container.service,
     newRef,
@@ -139,12 +208,23 @@ async function upgradeOne(
     // that runs `docker compose up -d --force-recreate admin-sh` after a
     // 3s sleep — enough time for this HTTP response to flush. The helper
     // has AutoRemove: true so it cleans itself up.
+    //
+    // Pre-flight already ran above (before the pull), so we know the swap
+    // is viable and haven't persisted anything yet. Record intent so the
+    // recreated admin-sh can reconcile the real outcome (thread 4872).
+    await writeInProgress({ targetTag: tag, fromTag: container.imageTag })
     await persistTag(container.service, tag)
-    const helperId = await launchSelfUpgradeHelper(newRef)
+    const helperId = await launchSelfUpgradeHelper(newRef, tag)
     return {
       service: container.service,
       oldId: container.id,
       newId: `pending-via-helper:${helperId.slice(0, 12)}`,
+      selfUpgrade: {
+        pending: true,
+        targetTag: tag,
+        statusUrl: '/api/upgrade/self-status',
+        manualFallback: MANUAL_FALLBACK,
+      },
     }
   }
 
@@ -182,11 +262,7 @@ upgradeRouter.post('/', async (req, res) => {
       })
       return
     }
-    const results: Array<{
-      service: string
-      oldId: string
-      newId: string
-    }> = []
+    const results: UpgradeResult[] = []
     for (const c of targets) {
       results.push(await upgradeOne(c, body.tag))
     }
@@ -198,6 +274,23 @@ upgradeRouter.post('/', async (req, res) => {
     }
     const message = err instanceof Error ? err.message : String(err)
     logger.error('upgrade failed', { err: message })
+    res.status(500).json({ error: message })
+  }
+})
+
+// Real outcome of the last admin-sh self-upgrade. The dashboard polls this
+// after triggering one: the POST returns while the recreate is still in
+// flight (admin-sh dies mid-swap), so this endpoint — served by the
+// freshly-recreated admin-sh — is where success/failure actually surfaces.
+// Tag-match against the live container is the source of truth.
+upgradeRouter.get('/self-status', async (_req, res) => {
+  try {
+    const containers = await listProjectContainers()
+    const self = containers.find((c) => c.service === ADMIN_SH_SERVICE)
+    res.json(await reconcile(self?.imageTag ?? null))
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('self-status failed', { err: message })
     res.status(500).json({ error: message })
   }
 })

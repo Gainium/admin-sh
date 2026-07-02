@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-02
+
+### Added
+- `GET /api/upgrade/self-status`: reports the real outcome of the last
+  admin-sh self-upgrade. Because admin-sh dies mid-swap while recreating
+  its own container, the `POST /api/upgrade` response can only say the
+  recreate is *pending*; this endpoint — served by the freshly-recreated
+  admin-sh — reconciles the intent record + the helper's compose exit code
+  against the tag actually running now, so the dashboard can show a true
+  success/failure instead of a premature "success".
+
+### Fixed
+- Self-upgrading admin-sh no longer silently leaves the operator on the old
+  container (community thread 4872). Before recreating itself admin-sh now
+  pre-flights the requirements (`COMPOSE_DIR_HOST_PATH` set, the compose
+  file visible via the bind mount, the Docker daemon reachable) and returns
+  a clear, actionable error — including the manual fallback command
+  (`docker compose pull admin-sh && docker compose up -d --force-recreate
+  admin-sh`) — instead of reporting success. The self-upgrade helper now
+  records its compose exit code + log so failures are attributable.
+
 ## [1.1.0] - 2026-07-01
 
 ### Added

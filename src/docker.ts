@@ -287,6 +287,11 @@ export async function openLogStream(
 
 export { demuxLogFrames }
 
+/** Single-quote a value for safe interpolation into an `sh -c` script. */
+function shq(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
 /**
  * Spawn a short-lived helper container that runs `docker compose up -d
  * --force-recreate <service>` against the host daemon. Used for self-
@@ -298,12 +303,19 @@ export { demuxLogFrames }
  *
  * The 3-second sleep gives admin-sh time to flush its HTTP response and
  * close the inbound connection before its own container goes away.
+ *
+ * After the recreate the helper writes an outcome status file (the compose
+ * exit code + target tag) and a plain-text log next to it in the compose
+ * dir, so the freshly-recreated admin-sh can read back whether it worked.
  */
 export async function spawnRecreateHelper(opts: {
   service: string
   helperImage: string
   composeProject: string
   composeDirHostPath: string
+  targetTag: string
+  statusFileName: string
+  logFileName: string
 }): Promise<{ helperId: string }> {
   // Ensure the helper image is available locally — pulled once, cached
   // forever after that.
@@ -323,12 +335,27 @@ export async function spawnRecreateHelper(opts: {
     opts.service,
   ].join(' ')
 
+  const statusPath = `${opts.composeDirHostPath}/${opts.statusFileName}`
+  const logPath = `${opts.composeDirHostPath}/${opts.logFileName}`
+  // Run the recreate, capture its output + exit code, then write a JSON
+  // status the new admin-sh reads back. Only fully-controlled values are
+  // interpolated (state/exitCode/tag/epoch) so no JSON escaping is needed;
+  // raw compose output goes to the plain-text log instead.
+  const script = [
+    'sleep 3',
+    `${composeCmd} > ${shq(logPath)} 2>&1`,
+    'CODE=$?',
+    'if [ "$CODE" -eq 0 ]; then STATE=success; else STATE=failed; fi',
+    `printf '{"state":"%s","exitCode":%s,"targetTag":"%s","finishedAt":%s}\\n' ` +
+      `"$STATE" "$CODE" ${shq(opts.targetTag)} "$(date +%s)000" > ${shq(statusPath)}`,
+  ].join('\n')
+
   const helper = await getDocker().createContainer({
     Image: opts.helperImage,
     // Use the host's compose project dir as both the bind mount and the
     // working directory so any `.env` / `.versions.env` files resolve.
     WorkingDir: opts.composeDirHostPath,
-    Cmd: ['sh', '-c', `sleep 3 && ${composeCmd}`],
+    Cmd: ['sh', '-c', script],
     HostConfig: {
       AutoRemove: true,
       Binds: [
