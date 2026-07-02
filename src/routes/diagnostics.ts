@@ -3,6 +3,7 @@ import { listProjectContainers } from '../docker'
 import { getRedis } from '../redis'
 import { getEnabledExchanges, KNOWN_EXCHANGES } from '../config'
 import { probeFeeds } from '../feeds'
+import { detectFeedConnectors, TICKER_ONLY_EXCHANGES } from '../feedConnectors'
 import { logger } from '../logger'
 
 // One-stop ops-health snapshot for the self-hosted Diagnostics page:
@@ -37,7 +38,7 @@ async function pingRedis(): Promise<{ ok: boolean; latencyMs?: number; error?: s
 diagnosticsRouter.get('/', async (req, res) => {
   const windowMs = clampWindow(req.query.window)
   try {
-    const [services, enabled, redis] = await Promise.all([
+    const [services, enabled, redis, feedConnectors] = await Promise.all([
       listProjectContainers().catch((err) => {
         logger.warn('diagnostics: container list failed', {
           err: err instanceof Error ? err.message : String(err),
@@ -46,9 +47,23 @@ diagnosticsRouter.get('/', async (req, res) => {
       }),
       getEnabledExchanges().catch(() => null),
       pingRedis(),
+      detectFeedConnectors().catch((err) => {
+        logger.warn('diagnostics: feed-connector detect failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+        return []
+      }),
     ])
 
     const feeds = await probeFeeds(windowMs, enabled, KNOWN_EXCHANGES)
+
+    // Is any running connector producing the `trade@` ticker feed? Without it,
+    // paper/live orders can't fill on any exchange (and ticker-only exchanges
+    // like Coinbase produce nothing at all). This is the 4872 condition made
+    // explicit.
+    const tickerRoleRunning = feedConnectors.some(
+      (c) => c.running && c.producesTicker,
+    )
 
     res.json({
       ts: Date.now(),
@@ -62,6 +77,9 @@ diagnosticsRouter.get('/', async (req, res) => {
       })),
       redis,
       feeds,
+      feedConnectors,
+      tickerRoleRunning,
+      tickerOnlyExchanges: TICKER_ONLY_EXCHANGES,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

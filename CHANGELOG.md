@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-02
+
+### Added
+- `/api/diagnostics` now reports the running **price-feed connectors** and their
+  role: `feedConnectors` (service, role, producesTicker/producesCandle,
+  exchanges), `tickerRoleRunning`, and `tickerOnlyExchanges`. Lets the dashboard
+  show which feed mode is running and flag exchanges that can't work in the
+  current mode (e.g. Coinbase is ticker-only) — the config cause behind
+  "enabled but no ticks". Detected by inspecting the `websocket-connector`
+  containers' `PRICEROLE`/`PRICE_CONNECTOR_EXCHANGES`.
+
 ## [1.2.0] - 2026-07-02
 
 ### Added
