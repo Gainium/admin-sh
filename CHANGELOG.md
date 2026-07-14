@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-14
+
+### Added
+- `/api/updates` now logs a copy-friendly `update check` summary to stdout on
+  every check — one line, deduped per image, showing the running tag vs. the
+  newest registry tag and how many updates are available. Lets self-hosted
+  operators paste their admin-sh logs (Services → admin-sh → View logs →
+  Download) when reporting persistent "update available" prompts, so we can
+  tell whether their pins simply lag the published images or the check is
+  misbehaving.
+
 ## [1.3.0] - 2026-07-02
 
 ### Added
