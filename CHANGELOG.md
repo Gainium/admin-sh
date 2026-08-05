@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-05
+
+### Added
+- `/api/encryption-key` — reports whether this installation has an encryption
+  key of its own for the exchange API credentials its users store, and can
+  generate one. `POST` writes a fresh 32-byte key to `ENCRYPT_KEY` in the host
+  `.env` (atomically, mode `0600`) and returns it once so the operator can save
+  a copy; the value is never logged. It refuses to overwrite a key that is
+  already set, and refuses outright when the compose project directory is not
+  mounted, pointing at `./setupEncryptKey.sh` instead. The stack picks the key
+  up on its next `docker compose up -d` — admin-sh does not recreate anything
+  by itself.
+
 ## [1.3.1] - 2026-07-14
 
 ### Added
