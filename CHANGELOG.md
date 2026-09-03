@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-03
+
+### Added
+- CI now runs a real `npm test` (mocha) on every PR. This repo had no test
+  runner before; `test/placeholder.spec.ts` is a stand-in until real
+  coverage lands.
+
 ## [1.4.0] - 2026-08-05
 
 ### Added
