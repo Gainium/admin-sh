@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Self-upgrading admin-sh no longer silently leaves the operator on the old
-  container (community thread 4872). Before recreating itself admin-sh now
+  container. Before recreating itself admin-sh now
   pre-flights the requirements (`COMPOSE_DIR_HOST_PATH` set, the compose
   file visible via the bind mount, the Docker daemon reachable) and returns
   a clear, actionable error — including the manual fallback command
