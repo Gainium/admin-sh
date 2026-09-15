@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-09-15
+
+### Security
+- Dependency lockfile refreshed so transitive packages resolve to their patched
+  releases, and the test runner upgraded to a release whose dependencies carry
+  the published security fixes. No functional change.
+
 ## [1.4.1] - 2026-09-03
 
 ### Added
