@@ -2,6 +2,7 @@ import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import { env } from './env'
+import { parseCorsOrigin } from './cors'
 import { logger } from './logger'
 import { authMiddleware } from './auth'
 import { seedDefaultEnabledExchanges } from './config'
@@ -17,12 +18,9 @@ const app = express()
 app.disable('x-powered-by')
 app.use(express.json({ limit: '256kb' }))
 
-if (env.corsOrigin) {
-  // Comma-separated origins → array; single value stays string.
-  const origins = env.corsOrigin.includes(',')
-    ? env.corsOrigin.split(',').map((s) => s.trim())
-    : env.corsOrigin
-  app.use(cors({ origin: origins, credentials: false }))
+const corsOrigins = parseCorsOrigin(env.corsOrigin)
+if (corsOrigins) {
+  app.use(cors({ origin: corsOrigins, credentials: false }))
 }
 
 // Health endpoint is intentionally unauthenticated so docker healthcheck
