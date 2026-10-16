@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-16
+
+### Fixed
+- `CORS_ORIGIN` now accepts several origins separated by commas and/or
+  whitespace, the same format the api accepts. Previously a space-separated
+  list was treated as one origin, so the Admin Center rejected every listed
+  address. A single origin behaves as before.
+
 ## [1.4.2] - 2026-09-15
 
 ### Security
