@@ -40,6 +40,7 @@ const SERVICE_TO_VERSION_VAR: Record<string, string> = {
   cron: 'MAIN_APP_VERSION',
   backtest: 'MAIN_APP_VERSION',
   'cli-runner': 'MAIN_APP_VERSION',
+  'fill-failsafe': 'MAIN_APP_VERSION',
   frontend: 'FRONTEND_VERSION',
   'exchange-connector': 'EXCHANGE_CONNECTOR_VERSION',
   'paper-trading': 'PAPER_TRADING_VERSION',

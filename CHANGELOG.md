@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-11-06
+
+### Added
+
+- Upgrades recognise the new `fill-failsafe` service, so its image tag is kept across restarts like the other main-app services.
+
 ## [1.4.3] - 2026-10-16
 
 ### Fixed
